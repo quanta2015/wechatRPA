@@ -6,36 +6,30 @@ import fs from 'fs'
 import Jimp from "jimp"
 import { iconDb } from './db.js'
 import axios from 'axios'
+import { readFileSync } from 'fs'
+import { execSync } from 'child_process'
 
 
-const DOMAIN   = `https://front.dev.suosihulian.com/`
+const DOMAIN   = `https://m.suosishequ.com/`
 const API_SAVE = `${DOMAIN}gateway/spider/api/spider/addIncrement`
 
-const ITEM_LEN = 15
-const ITEM_H   = 64
-const SIZE     = 25
-const NEWS_H   = 80
-const DELAY    = 500
-// const DIM      = { X:1920,Y:1080 }
+
 const DIM      = { X:1680,Y:998 }
 const p_search = { x:100, y:40  }  // 搜索框坐标
 const p_item   = { x:100, y:115 }  // 搜索第一个元素坐标
-const p_pre    = { x:500, y:60  }  // 滚动条底部坐标
-const p_next   = { x:500, y:954 }  // 滚动条底部坐标
-const p_copy   = { x:1270,y:670 }  // 拷贝按钮的坐标
-const p_news   = { x:1000,y:330 }  // 第一个公众号新闻坐标
-const p_icon   = { x:266, y:72  }  // 第一个公众号图标坐标
-
 
 
 
 // 延时函数
-export const delay = ms => new Promise(r => setTimeout(r, ms))
+export const delay = ms => new Promise(r => {
+  let rand = parseInt(Math.random() * 500)
+  setTimeout(r, ms+rand)
+})
 // 格式化时间
 export const formatTime =(t)=> dayjs(t).format('YYYY-MM-DD hh:mm:ss')
 
 // 移动并点击鼠标
-export const moveClick =async(p,d=1000)=>{
+export const moveClick =async(p,d=2000)=>{
   r.moveMouse(p.x,p.y)
   r.mouseClick()
   await delay(d)
@@ -52,32 +46,19 @@ export const getPixelColor=(x, y)=> {
 
 // 打开订阅号
 export const openRead = async() => {
-  r.moveMouse(p_search.x,p_search.y)
-  r.mouseClick()
+  moveClick(p_search)
   r.typeString('dyh')
   r.keyTap('enter')
   await delay(1000)
-  r.moveMouseSmooth(p_item.x,p_item.y)
-  r.mouseClick()
+  moveClick(p_item)
+  await delay(3000)
 }
 
 
 // 检查是否阅读过
 export const checkUnread = (p,pos) => {
-  let c1 = getPixelColor(p.x, p.y)
-  let c2 = getPixelColor(p.x - 1, p.y)
-  let c3 = getPixelColor(p.x + 1, p.y)
-  let c4 = getPixelColor(p.x, p.y - 1)
-  let c5 = getPixelColor(p.x, p.y + 1)
-  // console.log(c1,c2,c3,c4,c5)
-
-  return (c1=== pos.CLR)? true:false
-
-  // if ((c1 === uc) && (c2 === uc) && (c3 === uc) && (c4 === uc) && (c5 === uc)) {
-  //   return true
-  // } else {
-  //   return false
-  // }
+  let clr = getPixelColor(p.x, p.y)
+  return (clr=== pos.CLR)? true:false
 }
 
 
@@ -90,7 +71,7 @@ export const noRepeat =(list)=>{
 export const saveNews = (name,type,urls) => {
   let  data = { 
     "columnName":name,
-    "accountType":type,
+    "accountType":type?0:1,
     "urls":urls,  
   }
   const opt = { headers: { 'Content-Type': 'application/json' }}
@@ -99,30 +80,41 @@ export const saveNews = (name,type,urls) => {
       console.log(r);
     }else{
       console.log(data)
+      // console.log("\n")
     }
   })
+}
+
+
+export const paste =()=>{
+  execSync('powershell get-clipboard > clip')
+  let data = readFileSync( 'clip' ,{encoding:'utf8'})
+  return data
 }
 
 
 // 阅读公众号新闻
 export const readSaveUrl = async(p,pos,name)=>{
   await moveClick(p)
-  await moveClick(p_news)
+  await moveClick(pos.p_news)
 
   let url
   let newsList = []
   for (let j = 0; j < 8; j++) {
     let np = {x:pos.p_news.x, y:pos.p_news.y + j * pos.NEWS_H}
-    await moveClick(np)
+    await moveClick(np,3000)
 
     //打开文件
-    await moveClick({x:pos.p_copy.x, y:pos.p_copy.y})
-    let url = clipboardy.readSync();
+    await moveClick({x:pos.p_copy.x, y:pos.p_copy.y},4000)
+    // let url = clipboardy.readSync();
+    let url = paste()
     newsList.push(url)
+    await delay(2000)
   }
   newsList = noRepeat(newsList)
 
   saveNews(name, pos.TYPE, newsList)
+  return newsList.length
 }
 
 
@@ -145,6 +137,7 @@ export const compare =(buf1,buf2)=> {
       count ++
     }
   })
+  // console.log(count)
   return (count/len > 0.9)?0:1
 }
 
@@ -153,27 +146,63 @@ export const getName =(icon,index, pos)=>{
   let type = pos.TYPE
   let db = iconDb[type]
   let find = false
-  for(let i=0;i<db.length;i++) {
-    let _dir = process.cwd()
-    let _id  = db[i].id.padStart(3,'0')
-    let file = path.join(_dir, `icon/json/${type}/${_id}.json`) 
-    let data = fs.readFileSync(file)
-    let buf  = Buffer.from(JSON.parse(data).image)
-    // let rc = Buffer.compare(icon.image, buf)
-    let rc = compare(icon.image, buf)
-    if (rc === 0) {
-      ret = db[i].name
-      find = true
-      break;
+  
+  // for(let i=0;i<db.length;i++) {
+  //   let _dir = process.cwd()
+  //   let _id  = db[i].id.padStart(3,'0')
+  //   let file = path.join(_dir, `icon/json/${type}/${_id}.json`) 
+  //   let data = fs.readFileSync(file)
+  //   let buf  = Buffer.from(JSON.parse(data).image)
+  //   // let rc = Buffer.compare(icon.image, buf)
+  //   let rc = compare(icon.image, buf)
+  //   if (rc === 0) {
+  //     ret = db[i].name
+  //     find = true
+  //     break;
+  //   }
+  // }
+
+  let _root = process.cwd()
+  let _dir = path.join(_root, `icon/json/${type}/`)
+  const files = fs.readdirSync(_dir);
+  for(let i=0;i<files.length;i++) {
+    let fileName = `${_dir}${files[i]}`;
+    let stat = fs.lstatSync(fileName);
+    if (stat.isFile() === true) { 
+      let data = fs.readFileSync(fileName)
+      let buf  = Buffer.from(JSON.parse(data).image)
+      let rc = compare(icon.image, buf)
+      if (rc === 0) {
+        ret = db[i].name
+        find = true
+        break;
+      }
     }
   }
+
+  // for(let i=0;i<db.length;i++) {
+  //   let _dir = process.cwd()
+  //   let _id  = db[i].id.padStart(3,'0')
+  //   let file = path.join(_dir, `icon/json/${type}/${_id}.json`) 
+  //   let data = fs.readFileSync(file)
+  //   let buf  = Buffer.from(JSON.parse(data).image)
+  //   // let rc = Buffer.compare(icon.image, buf)
+  //   let rc = compare(icon.image, buf)
+  //   if (rc === 0) {
+  //     ret = db[i].name
+  //     find = true
+  //     break;
+  //   }
+  // }
+
+
   if (!find) {
     let { TX, TW, TH } = pos
     let _dir  = process.cwd()
     let _id = dayjs().format('YYYMMDDHHmmss')
-    let _fileIcon = path.join(_dir, `err/${_id}icon.png`)
-    let _fileText = path.join(_dir, `err/${_id}text.bmp`)
-    let _fileJson = path.join(_dir, `err/${_id}data.json`)
+    let _fileIcon = path.join(_dir, `err/img/${type}/${_id}icon.png`)
+    let _fileText = path.join(_dir, `err/text/${type}/${_id}text.bmp`)
+    let _fileJson = path.join(_dir, `err/json/${type}/${_id}data.json`)
     let text  = r.screen.capture(pos.p_icon.x+TX, pos.p_icon.y+pos.ITEM_H*index, TW, TH);
     saveIcon(icon,_fileIcon)
     saveIcon(text,_fileText)
@@ -228,4 +257,37 @@ export const checkEndByIcon =async(pos)=>{
   let icon_after  = r.screen.capture(pos.p_icon.x, pos.p_icon.y, 14, 14);
   let rc = Buffer.compare(icon_before.image, icon_after.image)
   return (rc===0)?true:false
+}
+
+const removeItem =(list,index)=>{
+  for(let i=index;i<list.length-1;i++) {
+    list[i] = list[i+1]
+  }
+}
+
+export const filterDb =(list)=>{
+
+  let same = 0
+  let len = list.length
+
+  for(let i=0;i<len;i++) {
+
+    for(let j=i+1;j<len;) {
+      if (list[i].name === list[j].name) {
+        console.log(list[i].id, list[j].id)
+        removeItem(list,j)
+        same++
+        len--
+      }else{
+        j++
+      }
+    }
+  }
+
+  for(let i=0;i<same;i++) {
+    list.pop()
+  }
+
+  console.table(list)
+
 }

@@ -5,22 +5,7 @@ import r from 'robotjs'
 import fs from 'fs'
 import Jimp from "jimp"
 import { iconDb,PS } from './db.js'
-import { 
-  delay, 
-  moveClick, 
-  checkUnread, 
-  getPixelColor, 
-  noRepeat, 
-  saveData, 
-  readSaveUrl, 
-  calcTime, 
-  formatTime, 
-  checkEndByIcon, 
-  scrollToTop, 
-  getName, 
-  saveIcon, 
-  openRead 
-} from './fn.js'
+import { delay, moveClick, checkUnread, getPixelColor, noRepeat, saveData, readSaveUrl, calcTime, formatTime, checkEndByIcon, scrollToTop, getName, saveIcon, openRead } from './fn.js'
 
 
 // 订阅号任务
@@ -36,7 +21,6 @@ const task = async(pos)=> {
     for(let i=0;i<pos.ITEM_L;i++) {
       let p = {x:pos.p_init.x, y:pos.p_init.y+pos.ITEM_H*i}
       let c = checkUnread(p,pos)
-      // console.log(page, i+1, c)
       
       if (c) {
         await moveClick(p)
@@ -75,11 +59,12 @@ const task = async(pos)=> {
 
 
 const main = async()=> {
-  await openRead()
-  await task(PS.d)
-  await task(PS.f)
-
-  delay(1000 * 60 * 10)
+  while(1) {
+    await openRead()
+    await task(PS.d)
+    await task(PS.f)
+    await delay(1000 * 60 * 5)
+  }
 }
 
 main()
