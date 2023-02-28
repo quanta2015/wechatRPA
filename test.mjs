@@ -1,1 +1,0 @@
-ClipboardEvent.clipboardData
